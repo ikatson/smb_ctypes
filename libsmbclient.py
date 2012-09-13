@@ -1,5 +1,11 @@
+#!/usr/bin/env python2
+
+import getpass
+
 from ctypes import *
 from ctypes.util import find_library
+
+import sys
 
 smbclient = CDLL(find_library('smbclient'), use_errno=True)
 libc = CDLL(find_library('c'), use_errno=True)
@@ -8,6 +14,10 @@ libc = CDLL(find_library('c'), use_errno=True)
 perror = libc.perror
 perror.argtypes = [c_char_p]
 perror.restype = None
+
+strerror = libc.strerror
+strerror.argtypes = [c_int]
+strerror.restype = c_char_p
 
 strcpy = libc.strcpy
 strcpy.argtypes = [c_char_p, c_char_p]
@@ -54,8 +64,8 @@ smbc_init.restype = c_int
 
 def py_auth_func(source, share, workgroup_p, workgroup_p_len,
                  user_p, user_p_len, password_p, password_p_len):
-    # the password is soul
-    strcpy(password_p, 'soul')
+    strcpy(user_p, raw_input('Username: ')[:user_p_len])
+    strcpy(password_p, getpass.getpass('Password: ')[:user_p_len])
     return
 
 auth_func = AUTHFUNC(py_auth_func)
@@ -81,8 +91,39 @@ smbc_opendir = s.smbc_opendir
 smbc_opendir.argtypes = [c_char_p]
 smbc_opendir.restype = c_int
 
+WORKGROUP = 1
+SERVER = 2
+FILE_SHARE = 3
+PRINTER_SHARE = 4
+COMMS_SHARE = 5
+IPC_SHARE = 6
+DIR = 7
+FILE = 8
+LINK = 9
+
+TYPE_STRINGS = {
+    WORKGROUP: 'workgroup',
+    SERVER: 'server',
+    FILE_SHARE: 'file_share',
+    PRINTER_SHARE: 'printer_share',
+    COMMS_SHARE: 'comms_share',
+    IPC_SHARE: 'ipc_share',
+    DIR: 'dir',
+    FILE: 'file',
+    LINK: 'link'
+}
+
 class smbc_dirent(Structure):
-    __fields__ = []
+    _fields_ = [
+        ('smbc_type', c_uint),
+        ('dirlen', c_uint),
+        ('commentlen', c_uint),
+        ('comment', c_char_p),
+        ('namelen', c_uint),
+        # This one is wrong, but it works somewhy
+	# char name[1];
+        ('name', c_char * 128)
+    ]
 
 smbc_dirent_p = POINTER(smbc_dirent)
 
@@ -98,10 +139,21 @@ smbc_set_credentials.argtypes = [c_char_p, c_char_p, c_char_p,
                                  smbc_bool, c_char_p]
 smbc_set_credentials.restype = None
 
+
 if __name__ == '__main__':
 
-    smbc_init(auth_func, 1)
+    smbc_init(auth_func, 0)
     context = smbc_new_context()
     smbc_init_context(context)
-    if smbc_opendir('smb://10.1.0.1/tmp_video') < 0:
+    dir_ = smbc_opendir(sys.argv[1])
+    if dir_ < 0:
         perror('Error connecting')
+        sys.exit(0)
+    while True:
+        dirent = smbc_readdir(dir_)
+        if not dirent:
+            break
+        print 'Type', TYPE_STRINGS[dirent.contents.smbc_type]
+        print 'Comment', dirent.contents.comment
+        print 'Name', dirent.contents.name
+        

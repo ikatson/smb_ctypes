@@ -52,10 +52,10 @@ smbc_init.argtypes = [AUTHFUNC, c_int]
 smbc_init.restype = c_int
 
 
-def py_auth_func(src, shr, wg, wglen, un, unlen, pw, pwlen):
-    print src, shr, wg, wglen, un, unlen, pw, pwlen
+def py_auth_func(source, share, workgroup_p, workgroup_p_len,
+                 user_p, user_p_len, password_p, password_p_len):
     # the password is soul
-    strcpy(pw, c_char_p('soul'))
+    strcpy(password_p, 'soul')
     return
 
 auth_func = AUTHFUNC(py_auth_func)
@@ -100,8 +100,8 @@ smbc_set_credentials.restype = None
 
 if __name__ == '__main__':
 
-    print smbc_init(auth_func, 10)
+    smbc_init(auth_func, 1)
     context = smbc_new_context()
-    print smbc_init_context(context)
-    print smbc_opendir('smb://10.1.0.1/tmp_video')
-    perror('Error doing stuff')
+    smbc_init_context(context)
+    if smbc_opendir('smb://10.1.0.1/tmp_video') < 0:
+        perror('Error connecting')
